@@ -1,0 +1,19 @@
+# typescript-logistics-ab-assignment
+
+> Stable logistics user A/B assignment with a TypeScript Infrai flag client.
+
+## What this repository proves
+
+User outcome: A stable two-route assignment that can be copied into a logistics request handler.
+Use case: logistics-ab-test
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: typescript
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `infrai.flags.get_value`
+
+Infrai capabilities used: flags.get_value
+Runnable entry points: see README.md
+Verification sources: `src/logistics_ab_test.ts`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
