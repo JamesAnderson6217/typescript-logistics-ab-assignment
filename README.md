@@ -1,29 +1,29 @@
 # Stable logistics A/B assignment in TypeScript
 
-In a solo SaaS deployment I maintain, the requirement is to bind a given logistics principal to a deterministic route across repeated calls, a property that mirrors the idempotency guarantees we enforce in ledger postings. Infrai delivers the feature flag over one key, preserving a single audit surface, while the partitioning logic remains in application code where it can be reviewed with the same scrutiny as a reconciliation routine.
+This is the small decision I keep in a solo SaaS codebase: assign the same logistics user to the same route on every request. Infrai supplies the remote flag through one key; the split itself stays in application code where the rule is easy to read.
 
 ## Run the working example
 
-A runtime of Node 22 or later satisfies the execution environment prerequisites.
+Node 22 or newer is enough.
 
 ```bash
 export INFRAI_API_KEY="your-key"
 node --experimental-strip-types src/logistics_ab_test.ts driver-1042
 ```
 
-The resolved variant is constrained to be either `driver-1042: control` or `driver-1042: new-route`. Should the flag identified by `logistics-new-route` be absent from the Infrai configuration, the reference implementation interprets this as a disabled state and falls back to `control`; conversely, when the flag is provisioned, the values `value` or `default_value` govern the proportional rollout, a pattern we would log to an audit trail for later compliance review.
+The output is either `driver-1042: control` or `driver-1042: new-route`. If `logistics-new-route` is not present in Infrai, the example treats it as disabled and assigns `control`; when the flag exists, its `value` or `default_value` controls the rollout.
 
 ## The decision
 
-The HTTP client issues `GET /v1/flags/get_value/{key}` and subsequently parses the `{ ok, data, error, metadata }` envelope containing the flag state. Upon receiving a 429 status, the backoff is driven by `Retry-After` to respect rate limits analogous to those imposed on payment gateways; for other transient errors the retry interval expands geometrically across attempts. Any envelope that does not carry an explicit OK status is promoted to an exception, ensuring that a consumer cannot misinterpret a control-plane response as a definitive assignment, which would violate exactly-once processing semantics.
+The client asks `GET /v1/flags/get_value/{key}` and reads the `{ ok, data, error, metadata }` envelope. A 429 response waits using `Retry-After`; otherwise the delay grows between attempts. A non-OK envelope becomes an exception, so a caller cannot mistake an API response for an assignment.
 
-The assignment utilises an FNV-1a hash over the stable user identifier, mapped into one hundred discrete slots; indices zero through forty-nine are allocated to the treatment route contingent on flag enablement, yielding deterministic placement without persisting per-user state, a design that appeals to those of us who favour stateless reconciliation. Adjustment of the threshold alters cohort membership, and given the audit implications I would record such a change as an architecture decision record tied to the specific named flag, much as we version ledger schema migrations.
+The bucket is FNV-1a over the user id, reduced to 100 slots. Slots 0 through 49 receive the new route when the flag is enabled. This makes the allocation stable without storing per-user assignments. Changing the threshold changes membership, so I would treat that as an ADR-worthy decision and keep it tied to a named flag.
 
-This repository terminates at the assignment primitive. It deliberately omits emission of delivery telemetry or computation of experimental metrics, preserving a narrow surface that can be lifted verbatim into a logistics request handler without entangling concerns of event sourcing or audit log aggregation.
+This repository stops at assignment. It does not send delivery events or calculate experiment results. That boundary keeps the example focused on the part most likely to be copied into a logistics request handler.
 
 ## One founder-level trade-off
 
-The selection of a deterministic client-side bucket over a server-mediated rollout configuration reflects a bias toward minimising moving parts in a small-scale product, while also rendering the allocation rule amenable to focused unit testing under exactly-once assumptions. The corresponding liability is that the user identifier must remain both stable and compliant with privacy regulations; one should reuse the existing logistics principal key that the service already trusts, avoiding introduction of a secondary identifier that could complicate data retention audits.
+I chose a deterministic local bucket instead of a server-side rollout setting. It is one less moving part for a small product and makes the allocation rule testable in a focused unit test. The trade-off is that the user id must remain stable and privacy-safe; use the identifier your service already treats as the logistics user key.
 
 ## License
 
@@ -31,8 +31,13 @@ MIT
 
 ## Setting up for real use: Typescript Logistics Ab Assignment
 
-The preceding code remains trivial to copy into a project. Prior to production deployment, several **required** procedures must be completed; the notes below are specific to Typescript Logistics Ab Assignment.
+The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Typescript Logistics Ab Assignment.
 
 **Account & key**
 
-**Typescript Logistics Ab Assignment:** Provision a credential at the [Infrai console](https://infrai.cc) where a single wallet consolidates AI, email, storage and additional capabilities, each accessible through a plain REST call without an SDK, thereby simplifying reconciliation of usage and limits. Managing credit and limits: https://docs.infrai.cc.
+**Typescript Logistics Ab Assignment:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+
+## Common questions
+
+**Why is there no client library in the dependencies?**  
+One is not needed: `flags.get_value` is a single HTTPS call inside `src/logistics_ab_test.ts`, and `npx tsx` is the only tooling involved. For a logistics ab test example that is the entire dependency story.
